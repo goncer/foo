@@ -94,7 +94,7 @@ Data pages:
 |---|---|---|
 | Results of a round | `NFG_CmpJornada?cod_primaria=1000128&CodCompeticion=C&CodGrupo=G&CodTemporada=T&CodJornada=J` | ✅ |
 | Standings | `NFG_VisClasificacion?cod_primaria=1000128&codcompeticion=C&codgrupo=G&codjornada=J` | ✅ |
-| Top scorers | `NFG_CMP_Goleadores?cod_primaria=1000128&codcompeticion=C&codtemporada=T&codgrupo=G&CodJornada=J` | ✅ |
+| Top scorers | `NFG_CMP_Goleadores?cod_primaria=1000128&codcompeticion=C&codtemporada=T&codgrupo=G&CodJornada=J` | – (removed from scope) |
 | Full calendar | `NFG_VisCalendario_Vis?cod_primaria=1000128&codtemporada=T&codcompeticion=C&codgrupo=G` | next |
 | Match sheet (line-ups, goals, cards, referee, venue) | `NFG_CmpPartido?cod_primaria=1000128&CodActa=A&cod_acta=A` | next |
 | Team page | `NFG_VisEquipos?cod_primaria=1000102&Codigo_Equipo=E` | – (personal data) |
@@ -111,8 +111,7 @@ Result status on the site (CSS class → our `status`): `resultado_enjuego` → 
 These IDs are the app's only configuration (`TEAM` in `lib/nfg.js`, overridable with env vars `NFG_TEAM_ID`, `NFG_SEASON`, `NFG_COMPETITION`, `NFG_GROUP`). **Each new season** they must be updated: open "Consulta de Calendarios, Resultados y Clasificaciones" on the site, choose the season → Liga de Veteranos F-S → the group, and read the ids from the URL (`CodTemporada`, `CodCompeticion`, `CodGrupo`).
 
 ### 1.7 Security / privacy notes
-- Pages expose **personal data** (names, emails, phones of club contacts, player lists, line-ups). The API only exposes whitelisted views (results, standings, scorers) and is **not** an open proxy: fixed URLs, numeric parameters only.
-- Scorers include player names. Acceptable for a private view; think twice before making it public.
+- Pages expose **personal data** (names, emails, phones of club contacts, player lists, line-ups). The API only returns the team's standings, results and fixtures (team names, scores, dates, venues; no player names) and is **not** an open proxy: fixed URLs, no parameters.
 - Optional `APP_KEY` env var: when set, the API requires `?key=…` (the page forwards `?key=` from its own URL).
 - Credentials live only in the platform's environment variables (`NFG_USER`, `NFG_PASS`). Never in the HTML or the repo.
 - The site reflects any `Origin` with credentials in CORS. A weakness on their side; we don't use it.
