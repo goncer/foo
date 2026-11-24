@@ -1,6 +1,7 @@
 # NFG Getafe – Friendly View: Investigation Notes & Plan
 
 > Status: **decision taken – serverless functions. Working prototype in this folder** (see [README](README.md)).
+> Scope: **only LOS PACHONES** (Liga de Veteranos F-S, Tercera Grupo B). For the team's players: standings, results, upcoming matches.
 > Target: `https://getafe.ffmadrid.es/nfg/` (Novanet "NFG" intranet, Competición Local de Getafe – RFFM)
 > Account used for investigation: club user for **LOS PACHONES (club code 9028)**. Credentials are **not** stored in this repo.
 
@@ -21,7 +22,7 @@ Rejected options, for the record:
 - *Bookmarklet / userscript*: live and serverless, but every user must install it and log in themselves → kept as plan B.
 - *Native app*: possible, but app stores + more work → kept as a later option.
 
-![Results view](docs/ui_results.png) ![Standings view](docs/ui_standings.png)
+![Standings](docs/team_standings.png) ![Results](docs/team_results.png) ![Upcoming](docs/team_upcoming.png)
 
 ---
 
@@ -104,8 +105,10 @@ Built-in exports: `&NPcd_File=1` (Word) or `&excel=1&NPcd_File=1` (Excel) on cal
 
 Result status on the site (CSS class → our `status`): `resultado_enjuego` → `live`, `resultado_prov` → `provisional`, `resultado_cerrada` → `final`.
 
-### 1.6 Our club right now
-"Mi Club" shows **LOS PACHONES – LIGA DE VETERANOS F-S** flagged *"No está en competición"* this season. The prototype therefore lets the user pick any competition/group and choose "Mi equipo" to highlight.
+### 1.6 Our team
+"Mi Club" flags the team *"No está en competición"*, but that label is misleading: **LOS PACHONES (team id `308870`) plays in TERCERA DE VETERANOS F-S GRUPO B (`323310`)**, Liga de Veteranos F-S (`323306`), season 2026-2027 (`22`). Last season: competition `319435`, group `319439` (finished 3rd).
+
+These IDs are the app's only configuration (`TEAM` in `lib/nfg.js`, overridable with env vars `NFG_TEAM_ID`, `NFG_SEASON`, `NFG_COMPETITION`, `NFG_GROUP`). **Each new season** they must be updated: open "Consulta de Calendarios, Resultados y Clasificaciones" on the site, choose the season → Liga de Veteranos F-S → the group, and read the ids from the URL (`CodTemporada`, `CodCompeticion`, `CodGrupo`).
 
 ### 1.7 Security / privacy notes
 - Pages expose **personal data** (names, emails, phones of club contacts, player lists, line-ups). The API only exposes whitelisted views (results, standings, scorers) and is **not** an open proxy: fixed URLs, numeric parameters only.
@@ -129,23 +132,30 @@ Result status on the site (CSS class → our `status`): `resultado_enjuego` → 
                                       CDN cache 60 s (s-maxage)
 ```
 
-API: `GET /api/nfg?view=<view>&…`
+API: `GET /api/nfg` (optionally `?key=…`). One call returns everything the page needs:
 
-| view | params | returns |
-|---|---|---|
-| `seasons` | – | `[{id, name}]` |
-| `competitions` | `season` | `[{id, name}]` |
-| `groups` | `competition` | `[{id, name}]` |
-| `rounds` | `group` | `[{id, number, date}]` |
-| `results` | `season, competition, group, round` | `[{acta, home{id,name}, away{id,name}, homeGoals, awayGoals, status, date, time, venue}]` |
-| `standings` | `competition, group, round` | `[{teamId, position, team, points, pointsPerGame, home{played,won,drawn,lost}, away{…}, goalsFor, goalsAgainst, form[], sanctionPoints}]` |
-| `scorers` | `season, competition, group, round` | `[{player, team, group, played, goals, goalsPerGame}]` |
+```json
+{ "data": {
+    "team": "LOS PACHONES", "group": "TERCERA DE VETERANOS F-S GRUPO B", "season": "2026-2027",
+    "standingsAfterRound": 7,
+    "standings": [{ "position": 7, "team": "LOS PACHONES", "points": 8, "played": 7, "won": 2, "drawn": 2, "lost": 3,
+                    "goalsFor": 13, "goalsAgainst": 16, "form": ["P","P","E","P","G"], "teamId": "308870" }],
+    "upcoming":  [{ "round": 8, "date": "29-11-2026", "time": "16:00", "venue": "FS PABELLON PERALES",
+                    "home": true, "opponent": "PARQUE SG", "status": "scheduled" }],
+    "results":   [{ "round": 7, "date": "22-11-2026", "home": false, "opponent": "REAL VINAGRE",
+                    "goalsFor": 3, "goalsAgainst": 1, "outcome": "W", "status": "final" }] },
+  "fetchedAt": "…" }
+```
 
-Response: `{ view, data, fetchedAt }` or `{ error }` (400 bad params, 401 bad key, 502 site/login problem).
+How it is built (5–7 requests to the site, all over one connection):
+1. rounds of the group (dates) → pick the last round already played;
+2. season calendar (`NFG_VisCalendario_Vis`) → all team matches; empty score cells = not played yet;
+3. standings after the last played round;
+4. round pages of the **next 3** matches → exact date, kick-off time, venue (later rounds: "por confirmar" until the federation schedules them), and of the **latest result** → provisional / live status.
 
-Front-end: one page, Spanish, mobile-first, light/dark. Pickers for season → competition → group → round (defaults to the latest played round). Tabs Resultados / Clasificación / Goleadores, "Mi equipo" highlight. Choices remembered in `localStorage`.
+Front-end: one page, Spanish, mobile-first, light/dark, no pickers. "Próximo partido" card on top (opponent, local/visitante, date, time, venue, countdown), then three tabs: **Clasificación** (our row highlighted), **Resultados** (newest first, G/E/P badge), **Próximos** (rest of the season). "Actualizar" button reloads. Can be added to the phone home screen.
 
-Measured against the real site (from the sandbox): cold call with login ≈ 1–1.5 s, warm calls ≈ 150–300 ms.
+Measured against the real site (from the sandbox): ≈ 3–3.5 s for the whole page with login (the CDN cache then serves repeats for 60 s).
 
 ---
 
@@ -153,13 +163,12 @@ Measured against the real site (from the sandbox): cold call with login ≈ 1–
 
 | # | Work | Status |
 |---|---|---|
-| 1 | Scraper + function + page for seasons/competitions/groups/rounds/results/standings/scorers | ✅ done, smoke-tested against the live site |
+| 1 | Function + page for LOS PACHONES: next match, standings, results, upcoming | ✅ done, tested against the live site |
 | 2 | **Deploy to Vercel** (needs your Vercel account): import repo, root dir `nfg-view`, set `NFG_USER`, `NFG_PASS` (+ optional `APP_KEY`) | ⏳ you |
 | 3 | Verify the connection-bound session from Vercel's network (expected fine: one invocation = one connection) | ⏳ after deploy |
-| 4 | Add views: full calendar, match sheet (goals/cards timeline), "next match of my team" | todo |
-| 5 | Parser tests with saved, anonymised HTML fixtures (so template changes are caught early) | todo |
-| 6 | Installable on the phone home screen (web app manifest + icon) | todo, small |
-| 7 | Sanctions / head-to-head if wanted | optional |
+| 4 | Parser tests with saved HTML fixtures (so template changes are caught early) | todo |
+| 5 | Home-screen icon (web app manifest) | todo, small |
+| 6 | New season: update the 4 IDs (section 1.6) | each summer |
 
 Netlify works too: wrap `handle()` from `lib/nfg.js` in a Netlify function. Only `api/nfg.js` changes.
 
@@ -176,6 +185,5 @@ Netlify works too: wrap `handle()` from `lib/nfg.js` in a Netlify function. Only
 
 ## 5. Open questions
 1. Who owns the Vercel account / where should it be deployed?
-2. Private (with `APP_KEY`) or open to anyone with the link?
-3. Which extra views first: calendar, match sheet, or "next match of my team"?
-4. Default competition/group to open on (e.g. Veteranos – Primera)?
+2. Private link with `APP_KEY` (recommended) or open?
+3. Anything else the players want (e.g. match sheet with goal scorers)? Kept out on purpose for now.

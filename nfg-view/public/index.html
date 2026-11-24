@@ -3,200 +3,175 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Liga Getafe</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Los Pachones">
+<meta name="theme-color" content="#c8102e">
+<title>Los Pachones</title>
 <style>
   :root {
-    --bg: #f5f6f8; --card: #fff; --text: #1d2230; --muted: #6b7280; --line: #e5e7eb;
-    --accent: #c8102e; --accent-soft: #fde8eb; --win: #16a34a; --draw: #9ca3af; --loss: #dc2626; --live: #16a34a; --prov: #d97706;
+    --bg: #f4f5f7; --card: #fff; --text: #1d2230; --muted: #6b7280; --line: #e6e8ec;
+    --accent: #c8102e; --accent-soft: #fde8eb; --win: #16a34a; --draw: #9ca3af; --loss: #dc2626; --prov: #d97706;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #12141a; --card: #1c1f27; --text: #e8eaf0; --muted: #9aa1b2; --line: #2b2f3a; --accent: #ff4d5e; --accent-soft: #3a1d24; }
+    :root { --bg: #111318; --card: #1b1e26; --text: #e8eaf0; --muted: #9aa1b2; --line: #2a2e39; --accent: #ff4d5e; --accent-soft: #3a1d24; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
-  header { background: var(--accent); color: #fff; padding: 14px 16px; }
-  header h1 { margin: 0; font-size: 18px; }
+  header { background: var(--accent); color: #fff; padding: 18px 16px 64px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: .5px; }
   header p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
-  main { max-width: 760px; margin: 0 auto; padding: 12px 16px 40px; }
-  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-  .filters label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
-  select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); width: 100%; }
-  .tabs { display: flex; gap: 6px; margin: 4px 0 12px; overflow-x: auto; }
-  .tabs button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
-  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .status { padding: 24px; text-align: center; color: var(--muted); }
+  main { max-width: 640px; margin: -48px auto 0; padding: 0 16px 32px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .status { padding: 28px; text-align: center; color: var(--muted); }
   .error { color: var(--loss); }
+
+  /* next match */
+  .next { padding: 16px; margin-bottom: 14px; }
+  .next .label { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .6px; }
+  .next .vs { font-size: 21px; font-weight: 800; margin: 4px 0 8px; }
+  .next .where { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: middle; }
+  .next .when { font-size: 16px; font-weight: 600; }
+  .next .when::first-letter { text-transform: uppercase; }
+  .next .meta { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .next .countdown { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+  /* tabs */
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+  .tabs button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 9px 4px; border-radius: 10px; cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* standings */
   table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: center; }
+  th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); text-align: center; font-variant-numeric: tabular-nums; }
   th { font-size: 12px; color: var(--muted); font-weight: 600; }
   td.team, th.team { text-align: left; }
   tr:last-child td { border-bottom: 0; }
-  tr.mine td { background: var(--accent-soft); font-weight: 600; }
+  tr.us td { background: var(--accent-soft); font-weight: 700; }
   .pts { font-weight: 700; }
-  .form { display: inline-flex; gap: 2px; }
-  .form i { font-style: normal; font-size: 10px; font-weight: 700; color: #fff; width: 16px; height: 16px; line-height: 16px; border-radius: 4px; display: inline-block; }
-  .form .G { background: var(--win); } .form .E { background: var(--draw); } .form .P { background: var(--loss); }
-  .match { padding: 12px 14px; border-bottom: 1px solid var(--line); }
-  .match:last-child { border-bottom: 0; }
-  .row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
-  .row .home { text-align: right; } .row .away { text-align: left; }
-  .score { font-weight: 800; font-size: 18px; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
-  .score.live { color: var(--live); } .score.provisional { color: var(--prov); }
-  .meta { font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px; }
-  .mine-team { color: var(--accent); font-weight: 700; }
-  .hide-sm { } @media (max-width: 520px) { .hide-sm { display: none; } }
+  @media (max-width: 420px) { .wide { display: none; } }
+
+  /* lists */
+  .item { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .round { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .opp { font-weight: 600; }
+  .sub { font-size: 12px; color: var(--muted); }
+  .score { font-weight: 800; font-size: 17px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; }
+  .badge { font-size: 11px; font-weight: 800; color: #fff; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 6px; }
+  .W { background: var(--win); } .D { background: var(--draw); } .L { background: var(--loss); }
+  .tag { font-size: 11px; font-weight: 600; color: var(--prov); }
+  .time { text-align: right; font-size: 13px; }
+  .pending { color: var(--muted); font-size: 12px; }
+
   footer { font-size: 12px; color: var(--muted); text-align: center; margin-top: 14px; }
+  footer button { font: inherit; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 4px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Liga Getafe</h1>
-  <p id="subtitle">Resultados, clasificación y goleadores en directo</p>
+  <h1>LOS PACHONES</h1>
+  <p id="league">Liga de Veteranos F-S</p>
 </header>
 <main>
-  <div class="filters">
-    <label>Temporada <select id="season"></select></label>
-    <label>Competición <select id="competition"></select></label>
-    <label>Grupo <select id="group"></select></label>
-    <label>Jornada <select id="round"></select></label>
-    <label style="grid-column: 1 / -1">Mi equipo (resaltar) <select id="myteam"><option value="">—</option></select></label>
-  </div>
+  <section class="card next" id="next"><div class="status">Cargando…</div></section>
   <div class="tabs" role="tablist">
-    <button role="tab" data-tab="results" aria-selected="true">Resultados</button>
-    <button role="tab" data-tab="standings" aria-selected="false">Clasificación</button>
-    <button role="tab" data-tab="scorers" aria-selected="false">Goleadores</button>
+    <button role="tab" data-tab="standings" aria-selected="true">Clasificación</button>
+    <button role="tab" data-tab="results" aria-selected="false">Resultados</button>
+    <button role="tab" data-tab="upcoming" aria-selected="false">Próximos</button>
   </div>
-  <div class="card" id="content"><div class="status">Cargando…</div></div>
-  <footer id="updated"></footer>
+  <section class="card" id="content"><div class="status">Cargando…</div></section>
+  <footer><span id="updated"></span> · <button id="reload">Actualizar</button></footer>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
-const store = {
-  get(k) { try { return localStorage.getItem('nfg.' + k) || ''; } catch { return ''; } },
-  set(k, v) { try { localStorage.setItem('nfg.' + k, v); } catch {} },
-};
-const key = new URLSearchParams(location.search).get('key') || '';
-let tab = store.get('tab') || 'results';
-
-async function api(view, params = {}) {
-  const qs = new URLSearchParams({ view, ...params, ...(key ? { key } : {}) });
-  const r = await fetch('/api/nfg?' + qs);
-  const body = await r.json();
-  if (!r.ok) throw new Error(body.error || r.statusText);
-  $('updated').textContent = 'Datos de getafe.ffmadrid.es · ' + new Date(body.fetchedAt).toLocaleTimeString('es-ES');
-  return body.data;
-}
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const show = (html) => { $('content').innerHTML = html; };
-const loading = () => show('<div class="status">Cargando…</div>');
+const key = new URLSearchParams(location.search).get('key') || '';
+let data = null;
+let tab = (() => { try { return localStorage.getItem('pachones.tab') || 'standings'; } catch { return 'standings'; } })();
 
-function fill(sel, items, saved, label = (x) => x.name) {
-  sel.innerHTML = items.map((x) => `<option value="${esc(x.id)}">${esc(label(x))}</option>`).join('');
-  if (saved && items.some((x) => x.id === saved)) sel.value = saved;
-}
+const toDate = (d, t) => { const [dd, mm, yy] = d.split('-').map(Number); const [h, mi] = (t || '00:00').split(':').map(Number); return new Date(yy, mm - 1, dd, h, mi); };
+const longDate = (d) => toDate(d).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+const shortDate = (d) => toDate(d).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+const outcomeEs = { W: 'G', D: 'E', L: 'P' };
 
-async function loadSeasons() {
-  fill($('season'), await api('seasons'), store.get('season'));
-  await loadCompetitions();
-}
-async function loadCompetitions() {
-  store.set('season', $('season').value);
-  fill($('competition'), await api('competitions', { season: $('season').value }), store.get('competition'));
-  await loadGroups();
-}
-async function loadGroups() {
-  store.set('competition', $('competition').value);
-  fill($('group'), await api('groups', { competition: $('competition').value }), store.get('group'));
-  await loadRounds();
-}
-async function loadRounds() {
-  store.set('group', $('group').value);
-  const rounds = await api('rounds', { group: $('group').value });
-  // Default to the latest round whose date has passed.
-  const today = new Date();
-  const toDate = (d) => { const [dd, mm, yy] = (d || '').split('-'); return new Date(+yy, mm - 1, +dd); };
-  const past = rounds.filter((r) => r.date && toDate(r.date) <= today);
-  const fallback = (past.at(-1) || rounds[0] || {}).id;
-  fill($('round'), rounds, store.get('round:' + $('group').value) || fallback, (r) => `J${r.number} · ${r.date || ''}`);
-  await render();
-}
-
-const params = () => ({ season: $('season').value, competition: $('competition').value, group: $('group').value, round: $('round').value });
-const isMine = (name) => $('myteam').value && name === $('myteam').value;
-
-async function render() {
-  store.set('round:' + $('group').value, $('round').value);
-  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
-  loading();
+async function load() {
+  $('updated').textContent = 'Actualizando…';
   try {
-    if (tab === 'standings' || !$('myteam').dataset.group || $('myteam').dataset.group !== $('group').value) {
-      var standings = await api('standings', params());
-      fillTeams(standings);
-    }
-    if (tab === 'results') renderResults(await api('results', params()));
-    else if (tab === 'standings') renderStandings(standings);
-    else renderScorers(await api('scorers', params()));
+    const r = await fetch('/api/nfg' + (key ? '?key=' + encodeURIComponent(key) : ''));
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || r.statusText);
+    data = body.data;
+    const title = (t) => t.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).replace(/\bF-s\b/, 'F-S').replace(/ De /g, ' de ');
+    $('league').textContent = [data.group && title(data.group), data.season].filter(Boolean).join(' · ');
+    $('updated').textContent = 'Actualizado ' + new Date(body.fetchedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    renderNext();
+    render();
   } catch (e) {
-    show(`<div class="status error">No se pudieron cargar los datos: ${esc(e.message)}</div>`);
+    const msg = `<div class="status error">No se pudieron cargar los datos.<br>${esc(e.message)}</div>`;
+    $('next').innerHTML = msg; $('content').innerHTML = ''; $('updated').textContent = '';
   }
 }
 
-function fillTeams(standings) {
-  const sel = $('myteam');
-  const names = standings.map((s) => s.team).sort();
-  sel.innerHTML = '<option value="">—</option>' + names.map((n) => `<option>${esc(n)}</option>`).join('');
-  sel.value = names.includes(store.get('myteam')) ? store.get('myteam') : '';
-  sel.dataset.group = $('group').value;
+function renderNext() {
+  const m = data.upcoming[0];
+  if (!m) { $('next').innerHTML = '<div class="label">Próximo partido</div><div class="vs">Temporada terminada</div>'; return; }
+  const kick = toDate(m.date, m.time);
+  const days = Math.round((new Date(kick.getFullYear(), kick.getMonth(), kick.getDate()) - new Date(new Date().toDateString())) / 864e5);
+  const inDays = days <= 0 ? '¡Hoy!' : days === 1 ? 'Mañana' : `En ${days} días`;
+  $('next').innerHTML = `
+    <div class="label">Próximo partido · Jornada ${m.round}</div>
+    <div class="vs">${m.home ? 'vs' : '@'} ${esc(m.opponent)}<span class="where">${m.home ? 'Local' : 'Visitante'}</span></div>
+    <div class="when">${esc(longDate(m.date))}${m.time ? ' · ' + esc(m.time) : ''}</div>
+    <div class="meta">${m.venue ? esc(m.venue) : 'Horario y campo por confirmar'}</div>
+    <div class="countdown">${inDays}</div>`;
 }
 
-function renderResults(matches) {
-  if (!matches.length) return show('<div class="status">No hay partidos en esta jornada.</div>');
-  show(matches.map((m) => {
-    const played = m.homeGoals !== null;
-    const score = played ? `${m.homeGoals} - ${m.awayGoals}` : (m.time || 'vs');
-    const tag = { live: ' · en juego', provisional: ' · provisional' }[m.status] || '';
-    return `<div class="match">
-      <div class="row">
-        <div class="home ${isMine(m.home.name) ? 'mine-team' : ''}">${esc(m.home.name)}</div>
-        <div class="score ${m.status}">${esc(score)}</div>
-        <div class="away ${isMine(m.away.name) ? 'mine-team' : ''}">${esc(m.away.name)}</div>
-      </div>
-      <div class="meta">${esc(m.date || '')} ${esc(m.time || '')}${m.venue ? ' · ' + esc(m.venue) : ''}${tag}</div>
-    </div>`;
-  }).join(''));
+function render() {
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  if (!data) return;
+  if (tab === 'standings') renderStandings();
+  else if (tab === 'results') renderResults();
+  else renderUpcoming();
 }
 
-function renderStandings(rows) {
-  if (!rows.length) return show('<div class="status">Sin clasificación.</div>');
-  const pj = (r) => (r.home.played || 0) + (r.away.played || 0);
-  const sum = (r, k) => (r.home[k] || 0) + (r.away[k] || 0);
-  show(`<table><thead><tr><th>#</th><th class="team">Equipo</th><th>Pts</th><th>PJ</th>
-    <th class="hide-sm">G</th><th class="hide-sm">E</th><th class="hide-sm">P</th><th>GF:GC</th><th class="hide-sm">Racha</th></tr></thead><tbody>
-    ${rows.map((r) => `<tr class="${isMine(r.team) ? 'mine' : ''}"><td>${r.position}</td><td class="team">${esc(r.team)}</td>
-      <td class="pts">${r.points}</td><td>${pj(r)}</td><td class="hide-sm">${sum(r, 'won')}</td><td class="hide-sm">${sum(r, 'drawn')}</td>
-      <td class="hide-sm">${sum(r, 'lost')}</td><td>${r.goalsFor}:${r.goalsAgainst}</td>
-      <td class="hide-sm"><span class="form">${r.form.map((f) => `<i class="${esc(f)}">${esc(f)}</i>`).join('')}</span></td></tr>`).join('')}
-    </tbody></table>`);
+function renderStandings() {
+  const rows = data.standings;
+  $('content').innerHTML = `<table><thead><tr><th>#</th><th class="team">Equipo</th><th>Pts</th><th>PJ</th>
+    <th class="wide">G</th><th class="wide">E</th><th class="wide">P</th><th>Goles</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="${r.team === data.team ? 'us' : ''}"><td>${r.position}</td><td class="team">${esc(r.team)}</td>
+      <td class="pts">${r.points}</td><td>${r.played}</td><td class="wide">${r.won}</td><td class="wide">${r.drawn}</td><td class="wide">${r.lost}</td>
+      <td>${r.goalsFor}:${r.goalsAgainst}</td></tr>`).join('')}
+    </tbody></table>`;
 }
 
-function renderScorers(rows) {
-  if (!rows.length) return show('<div class="status">Sin goleadores.</div>');
-  show(`<table><thead><tr><th>#</th><th class="team">Jugador</th><th class="team hide-sm">Equipo</th><th>Goles</th><th>PJ</th></tr></thead><tbody>
-    ${rows.slice(0, 30).map((r, i) => `<tr class="${isMine(r.team) ? 'mine' : ''}"><td>${i + 1}</td>
-      <td class="team">${esc(r.player)}<div class="meta" style="text-align:left">${esc(r.team)}</div></td>
-      <td class="team hide-sm">${esc(r.team)}</td><td class="pts">${r.goals}</td><td>${r.played}</td></tr>`).join('')}
-    </tbody></table>`);
+function renderResults() {
+  if (!data.results.length) { $('content').innerHTML = '<div class="status">Todavía no hay resultados.</div>'; return; }
+  $('content').innerHTML = data.results.map((m) => `
+    <div class="item">
+      <div class="round">J${m.round}</div>
+      <div><div class="opp">${m.home ? 'vs' : '@'} ${esc(m.opponent)}</div>
+        <div class="sub">${esc(shortDate(m.date))} · ${m.home ? 'Local' : 'Visitante'}${m.status === 'provisional' ? ' · <span class="tag">provisional</span>' : m.status === 'live' ? ' · <span class="tag">en juego</span>' : ''}</div></div>
+      <div class="score">${m.goalsFor}-${m.goalsAgainst}<span class="badge ${m.outcome}">${outcomeEs[m.outcome]}</span></div>
+    </div>`).join('');
 }
 
-$('season').onchange = () => loadCompetitions().catch(fail);
-$('competition').onchange = () => loadGroups().catch(fail);
-$('group').onchange = () => loadRounds().catch(fail);
-$('round').onchange = () => render();
-$('myteam').onchange = () => { store.set('myteam', $('myteam').value); render(); };
-document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => { tab = b.dataset.tab; store.set('tab', tab); render(); });
-function fail(e) { show(`<div class="status error">No se pudieron cargar los datos: ${esc(e.message)}</div>`); }
-loadSeasons().catch(fail);
+function renderUpcoming() {
+  if (!data.upcoming.length) { $('content').innerHTML = '<div class="status">No quedan partidos.</div>'; return; }
+  $('content').innerHTML = data.upcoming.map((m) => `
+    <div class="item">
+      <div class="round">J${m.round}</div>
+      <div><div class="opp">${m.home ? 'vs' : '@'} ${esc(m.opponent)}</div>
+        <div class="sub">${m.home ? 'Local' : 'Visitante'}${m.venue ? ' · ' + esc(m.venue) : ''}</div></div>
+      <div class="time">${esc(shortDate(m.date))}<br>${m.time ? '<b>' + esc(m.time) + '</b>' : '<span class="pending">por confirmar</span>'}</div>
+    </div>`).join('');
+}
+
+document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
+  tab = b.dataset.tab; try { localStorage.setItem('pachones.tab', tab); } catch {}
+  render();
+}));
+$('reload').onclick = load;
+load();
 </script>
 </body>
 </html>

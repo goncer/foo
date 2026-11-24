@@ -10,6 +10,16 @@ const BASE = ORIGIN + '/nfg/';
 const UA = 'Mozilla/5.0 (compatible; nfg-friendly-view/0.1)';
 const CMP = '1000128'; // cod_primaria of "Calendarios, Resultados y Clasificaciones"
 
+// The one team this app is for. Update these IDs each season (or override with env vars).
+// How to find them: see PLAN.md, section 1.5.
+export const TEAM = {
+  id: process.env.NFG_TEAM_ID || '308870', // LOS PACHONES
+  name: process.env.NFG_TEAM_NAME || 'LOS PACHONES',
+  season: process.env.NFG_SEASON || '22', // 2026-2027
+  competition: process.env.NFG_COMPETITION || '323306', // LIGA DE VETERANOS F-S
+  group: process.env.NFG_GROUP || '323310', // TERCERA DE VETERANOS F-S GRUPO B
+};
+
 // Module-level state survives between invocations while the function stays warm.
 let cookie = '';
 
@@ -50,6 +60,7 @@ const dispatcher = new Client(ORIGIN, {
 const isLoginPage = (html) => html.includes('Novanet | Login');
 const clean = (s) => (s || '').replace(/\s+/g, ' ').trim();
 const num = (s) => {
+  if (clean(s) === '') return null; // empty cell = no score yet (Number('') would be 0)
   const n = Number(clean(s).replace(',', '.'));
   return Number.isFinite(n) ? n : null;
 };
@@ -103,40 +114,18 @@ export async function page(path) {
 
 // ---------- parsers (pure functions: html string -> data) ----------
 
-// Cascade endpoints answer with: new Array("id","label","id","label",...)
-export function parseArray(html) {
+// Rounds cascade answers with: new Array("id","label",...) and labels like "  1 - 27-09-2026  ".
+export function parseRounds(html) {
   const live = html.replace(/^\s*\/\/.*$/gm, ''); // ignore commented-out JS lines
   const m = live.match(/new Array\(([\s\S]*?)\)/);
   if (!m) return [];
   const items = [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]);
   const out = [];
   for (let i = 0; i + 1 < items.length; i += 2) {
-    if (items[i] !== '0' && items[i] !== '') out.push({ id: items[i], name: clean(items[i + 1]) });
+    const d = clean(items[i + 1]).match(/^(\d+)\s*-\s*(\d{2}-\d{2}-\d{4})/);
+    if (items[i] !== '0' && d) out.push({ round: Number(d[1]), date: d[2] });
   }
   return out;
-}
-
-// The competitions cascade injects a <select> as an HTML string instead of an array.
-export function parseOptions(html) {
-  const out = [];
-  for (const m of html.matchAll(/<option value='?"?(\d+)'?"?>([^<]*)</g)) {
-    if (m[1] !== '0') out.push({ id: m[1], name: clean(m[2]) });
-  }
-  return out.length ? out : parseArray(html);
-}
-
-export function parseSeasons(html) {
-  const $ = cheerio.load(html);
-  return $('select[name="temporada"] option')
-    .map((_, o) => ({ id: $(o).attr('value'), name: clean($(o).text()) }))
-    .get();
-}
-
-export function parseRounds(html) {
-  return parseArray(html).map((r) => {
-    const m = r.name.match(/^(\d+)\s*-\s*(\S+)/);
-    return { id: r.id, number: m ? Number(m[1]) : Number(r.id), date: m ? m[2] : null };
-  });
 }
 
 export function parseStandings(html) {
@@ -144,145 +133,168 @@ export function parseStandings(html) {
   const seen = new Set();
   const rows = [];
   $('tr[id]').each((_, tr) => {
-    const id = $(tr).attr('id');
-    const m = id.match(/^(\d+)_\d+$/);
+    const m = $(tr).attr('id').match(/^(\d+)_\d+$/);
     if (!m || seen.has(m[1])) return;
     const td = $(tr).children('td');
     if (td.length < 15) return;
     seen.add(m[1]);
     const t = (i) => clean(td.eq(i).text());
+    const sum = (a, b) => (num(t(a)) ?? 0) + (num(t(b)) ?? 0);
     rows.push({
       teamId: m[1],
       position: num(t(1)),
       team: clean($(tr).find(`#${m[1]}_nombre`).text()) || t(2),
       points: num(t(3)),
-      pointsPerGame: num(t(4)),
-      home: { played: num(t(5)), won: num(t(6)), drawn: num(t(7)), lost: num(t(8)) },
-      away: { played: num(t(9)), won: num(t(10)), drawn: num(t(11)), lost: num(t(12)) },
+      played: sum(5, 9),
+      won: sum(6, 10),
+      drawn: sum(7, 11),
+      lost: sum(8, 12),
       goalsFor: num(t(13)),
       goalsAgainst: num(t(14)),
       form: td.eq(15).find('span').map((_, s) => clean($(s).text())).get().filter(Boolean),
-      sanctionPoints: num(t(16)),
     });
   });
   return rows;
 }
 
+// Season calendar: one <div id="trPartidosJornada_N"> per round, date in <span id="fecha_jornada_org_N">,
+// rows <tr id="<acta>"><td>home</td><td>goals</td><td>-</td><td>goals</td><td>away</td>...
+export function parseCalendar(html) {
+  const $ = cheerio.load(html);
+  const matches = [];
+  $('div[id^="trPartidosJornada_"]').each((_, div) => {
+    const round = Number($(div).attr('id').split('_')[1]);
+    const date = (clean($(div).find(`#fecha_jornada_org_${round}`).text()).match(/\d{2}-\d{2}-\d{4}/) || [])[0] || null;
+    $(div)
+      .find('tr')
+      .filter((_, tr) => /^\d+$/.test($(tr).attr('id') || ''))
+      .each((_, tr) => {
+        const td = $(tr).children('td');
+        if (td.length < 5) return;
+        matches.push({
+          acta: $(tr).attr('id'),
+          round,
+          roundDate: date,
+          home: clean(td.eq(0).text()),
+          away: clean(td.eq(4).text()),
+          homeGoals: num(td.eq(1).text()),
+          awayGoals: num(td.eq(3).text()),
+        });
+      });
+  });
+  return matches;
+}
+
 const STATUS = { resultado_cerrada: 'final', resultado_prov: 'provisional', resultado_enjuego: 'live' };
 
-export function parseResults(html) {
+// One round page: each match is a <div class="portlet-body body_fed"><table>...</table></div>.
+// Played matches have scores and a match-sheet link; upcoming ones only date, time and venue.
+export function parseRound(html) {
   const $ = cheerio.load(html);
   const seen = new Set();
   const matches = [];
-  $('a[href*="NFG_CmpPartido"]').each((_, a) => {
-    const acta = ($(a).attr('href').match(/CodActa=(\d+)/) || [])[1];
-    if (!acta || seen.has(acta)) return;
-    // Match block = the table whose first row holds both teams and the score.
-    const block = $(a).closest('table').parents('table').first();
-    const teams = block.find('a[href*="NFG_VisEquipos"]');
+  $('div.portlet-body.body_fed > table').each((_, table) => {
+    const teams = $(table).find('a[href*="NFG_VisEquipos"]');
     if (teams.length < 2) return;
-    seen.add(acta);
-    const scores = block.find('span[class^="resultado_"]');
-    const goals = scores.map((_, s) => num($(s).text().replace('-', ''))).get();
-    const status = STATUS[scores.first().attr('class')] || (scores.length ? 'unknown' : 'pending');
-    const when = block.find('span.esconder').map((_, s) => clean($(s).text())).get();
-    const venue = (clean(block.text()).match(/Campo:\s*(.+?)(?:\s{2,}|$)/) || [])[1] || null;
-    const teamId = (el) => ($(el).attr('href').match(/Codigo_Equipo=(\d+)/) || [])[1];
+    const home = clean($(teams[0]).text());
+    const away = clean($(teams[1]).text());
+    if (seen.has(home + '|' + away)) return;
+    seen.add(home + '|' + away);
+    const scores = $(table).find('span[class^="resultado_"]');
+    const when = $(table).find('span.esconder').map((_, s) => clean($(s).text())).get();
     matches.push({
-      acta,
-      home: { id: teamId(teams[0]), name: clean($(teams[0]).text()) },
-      away: { id: teamId(teams[1]), name: clean($(teams[1]).text()) },
-      homeGoals: goals[0] ?? null,
-      awayGoals: goals[1] ?? null,
-      status,
+      home,
+      away,
+      status: STATUS[scores.first().attr('class')] || (scores.length ? 'unknown' : 'scheduled'),
       date: when.find((w) => /^\d{2}-\d{2}-\d{4}$/.test(w)) || null,
       time: when.find((w) => /^\d{1,2}:\d{2}$/.test(w)) || null,
-      venue,
+      venue: (clean($(table).text()).match(/Campo:\s*(.+?)(?:\s+-\s+\w+)?$/) || [])[1] || null,
     });
   });
   return matches;
 }
 
-export function parseScorers(html) {
-  const $ = cheerio.load(html);
-  const table = $('th')
-    .filter((_, th) => clean($(th).text()) === 'Jugador')
-    .first()
-    .closest('table');
-  return table
-    .find('tr')
-    .filter((_, tr) => $(tr).children('td').length >= 6)
-    .map((_, tr) => {
-      const t = (i) => clean($(tr).children('td').eq(i).text());
-      return { player: t(0), team: t(1), group: t(2), played: num(t(3)), goals: num(t(4)), goalsPerGame: num(t(5)) };
-    })
-    .get();
-}
+// ---------- the only view: everything the team page needs ----------
 
-// ---------- public API used by the function ----------
-
-const ID = /^\d{1,9}$/;
-function need(params, ...keys) {
-  for (const k of keys) {
-    if (!ID.test(params[k] ?? '')) throw Object.assign(new Error(`Missing or invalid "${k}"`), { status: 400 });
-  }
-}
-
-export const views = {
-  async seasons() {
-    return parseSeasons(await page(`NFG_CmpJornada?cod_primaria=${CMP}`));
-  },
-  async competitions(p) {
-    need(p, 'season');
-    return parseOptions(
-      await page(`NFG_CmpJornada_Exec?cod_primaria=${CMP}&codtemporada=${p.season}&cod_agrupacion=&Sch_Tipo_Juego=`),
-    );
-  },
-  async groups(p) {
-    need(p, 'competition');
-    return parseArray(await page(`NFG_CmpJornada_Exec?cod_primaria=${CMP}&codcompeticion=${p.competition}&cod_agrupacion=`));
-  },
-  async rounds(p) {
-    need(p, 'group');
-    return parseRounds(await page(`NFG_CmpJornada_Exec?cod_primaria=${CMP}&codgrupo=${p.group}&cod_agrupacion=`));
-  },
-  async results(p) {
-    need(p, 'season', 'competition', 'group', 'round');
-    return parseResults(
-      await page(
-        `NFG_CmpJornada?cod_primaria=${CMP}&CodCompeticion=${p.competition}&CodGrupo=${p.group}` +
-          `&CodTemporada=${p.season}&CodJornada=${p.round}&cod_agrupacion=&Sch_Tipo_Juego=`,
-      ),
-    );
-  },
-  async standings(p) {
-    need(p, 'competition', 'group', 'round');
-    return parseStandings(
-      await page(
-        `NFG_VisClasificacion?cod_primaria=${CMP}&codcompeticion=${p.competition}&codgrupo=${p.group}&codjornada=${p.round}`,
-      ),
-    );
-  },
-  async scorers(p) {
-    need(p, 'season', 'competition', 'group', 'round');
-    return parseScorers(
-      await page(
-        `NFG_CMP_Goleadores?cod_primaria=${CMP}&CodJornada=${p.round}&codcompeticion=${p.competition}` +
-          `&codtemporada=${p.season}&codgrupo=${p.group}`,
-      ),
-    );
-  },
+const toDate = (d) => {
+  const [dd, mm, yy] = (d || '').split('-').map(Number);
+  return new Date(yy, mm - 1, dd);
 };
 
+const roundUrl = (round) =>
+  `NFG_CmpJornada?cod_primaria=${CMP}&CodCompeticion=${TEAM.competition}&CodGrupo=${TEAM.group}` +
+  `&CodTemporada=${TEAM.season}&CodJornada=${round}&cod_agrupacion=&Sch_Tipo_Juego=`;
+
+export async function teamView({ upcomingDetails = 3, now = new Date() } = {}) {
+  const rounds = parseRounds(await page(`NFG_CmpJornada_Exec?cod_primaria=${CMP}&codgrupo=${TEAM.group}&cod_agrupacion=`));
+  const calendar = parseCalendar(
+    await page(
+      `NFG_VisCalendario_Vis?cod_primaria=${CMP}&codtemporada=${TEAM.season}` +
+        `&codcompeticion=${TEAM.competition}&codgrupo=${TEAM.group}`,
+    ),
+  );
+
+  // Standings after the last round whose date has passed.
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const lastRound = rounds.filter((r) => toDate(r.date) <= today).at(-1)?.round ?? 1;
+  const standingsHtml = await page(
+    `NFG_VisClasificacion?cod_primaria=${CMP}&codcompeticion=${TEAM.competition}` +
+      `&codgrupo=${TEAM.group}&codjornada=${lastRound}`,
+  );
+  const groupName = (clean(cheerio.load(standingsHtml)('body').text()).match(/LIGA DE VETERANOS F-S,\s*([^]+?)\s+Temporada\s+(\S+)/) || []);
+
+  const ours = calendar.filter((m) => m.home === TEAM.name || m.away === TEAM.name);
+  const toMatch = (m) => {
+    const home = m.home === TEAM.name;
+    const gf = home ? m.homeGoals : m.awayGoals;
+    const ga = home ? m.awayGoals : m.homeGoals;
+    return {
+      round: m.round,
+      date: m.roundDate,
+      time: null,
+      venue: null,
+      status: gf === null ? 'scheduled' : 'final',
+      home,
+      opponent: home ? m.away : m.home,
+      goalsFor: gf,
+      goalsAgainst: ga,
+      outcome: gf === null ? null : gf > ga ? 'W' : gf < ga ? 'L' : 'D',
+    };
+  };
+  const results = ours.filter((m) => m.homeGoals !== null).map(toMatch).reverse(); // newest first
+  const upcoming = ours.filter((m) => m.homeGoals === null).map(toMatch);
+
+  // Exact date/time/venue for the next few matches, and live/provisional status of the latest result.
+  const detailRounds = [...upcoming.slice(0, upcomingDetails), ...results.slice(0, 1)];
+  for (const m of detailRounds) {
+    const found = parseRound(await page(roundUrl(m.round))).find(
+      (x) => x.home === TEAM.name || x.away === TEAM.name,
+    );
+    if (!found) continue;
+    m.date = found.date || m.date;
+    m.time = found.time;
+    m.venue = found.venue;
+    if (m.status !== 'scheduled' || found.status === 'live') m.status = found.status === 'scheduled' ? m.status : found.status;
+  }
+
+  return {
+    team: TEAM.name,
+    group: groupName[1] || null,
+    season: groupName[2] || null,
+    standingsAfterRound: lastRound,
+    standings: parseStandings(standingsHtml),
+    upcoming,
+    results,
+  };
+}
+
 // Platform-neutral entry point: params object in, { status, body } out.
-export async function handle(params) {
+export async function handle(params = {}) {
   if (process.env.APP_KEY && params.key !== process.env.APP_KEY) {
     return { status: 401, body: { error: 'Unauthorized' } };
   }
-  const fn = views[params.view];
-  if (!fn) return { status: 400, body: { error: `Unknown view. Use one of: ${Object.keys(views).join(', ')}` } };
   try {
-    return { status: 200, body: { view: params.view, data: await fn(params), fetchedAt: new Date().toISOString() } };
+    return { status: 200, body: { data: await teamView(), fetchedAt: new Date().toISOString() } };
   } catch (e) {
     return { status: e.status || 502, body: { error: e.message } };
   }
