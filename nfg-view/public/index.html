@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liga Getafe</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1d2230; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #c8102e; --accent-soft: #fde8eb; --win: #16a34a; --draw: #9ca3af; --loss: #dc2626; --live: #16a34a; --prov: #d97706;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12141a; --card: #1c1f27; --text: #e8eaf0; --muted: #9aa1b2; --line: #2b2f3a; --accent: #ff4d5e; --accent-soft: #3a1d24; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--accent); color: #fff; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px 16px 40px; }
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .filters label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+  select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); width: 100%; }
+  .tabs { display: flex; gap: 6px; margin: 4px 0 12px; overflow-x: auto; }
+  .tabs button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 7px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .status { padding: 24px; text-align: center; color: var(--muted); }
+  .error { color: var(--loss); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 9px 8px; border-bottom: 1px solid var(--line); text-align: center; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.team, th.team { text-align: left; }
+  tr:last-child td { border-bottom: 0; }
+  tr.mine td { background: var(--accent-soft); font-weight: 600; }
+  .pts { font-weight: 700; }
+  .form { display: inline-flex; gap: 2px; }
+  .form i { font-style: normal; font-size: 10px; font-weight: 700; color: #fff; width: 16px; height: 16px; line-height: 16px; border-radius: 4px; display: inline-block; }
+  .form .G { background: var(--win); } .form .E { background: var(--draw); } .form .P { background: var(--loss); }
+  .match { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .match:last-child { border-bottom: 0; }
+  .row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; }
+  .row .home { text-align: right; } .row .away { text-align: left; }
+  .score { font-weight: 800; font-size: 18px; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .score.live { color: var(--live); } .score.provisional { color: var(--prov); }
+  .meta { font-size: 12px; color: var(--muted); text-align: center; margin-top: 4px; }
+  .mine-team { color: var(--accent); font-weight: 700; }
+  .hide-sm { } @media (max-width: 520px) { .hide-sm { display: none; } }
+  footer { font-size: 12px; color: var(--muted); text-align: center; margin-top: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Liga Getafe</h1>
+  <p id="subtitle">Resultados, clasificación y goleadores en directo</p>
+</header>
+<main>
+  <div class="filters">
+    <label>Temporada <select id="season"></select></label>
+    <label>Competición <select id="competition"></select></label>
+    <label>Grupo <select id="group"></select></label>
+    <label>Jornada <select id="round"></select></label>
+    <label style="grid-column: 1 / -1">Mi equipo (resaltar) <select id="myteam"><option value="">—</option></select></label>
+  </div>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="results" aria-selected="true">Resultados</button>
+    <button role="tab" data-tab="standings" aria-selected="false">Clasificación</button>
+    <button role="tab" data-tab="scorers" aria-selected="false">Goleadores</button>
+  </div>
+  <div class="card" id="content"><div class="status">Cargando…</div></div>
+  <footer id="updated"></footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem('nfg.' + k) || ''; } catch { return ''; } },
+  set(k, v) { try { localStorage.setItem('nfg.' + k, v); } catch {} },
+};
+const key = new URLSearchParams(location.search).get('key') || '';
+let tab = store.get('tab') || 'results';
+
+async function api(view, params = {}) {
+  const qs = new URLSearchParams({ view, ...params, ...(key ? { key } : {}) });
+  const r = await fetch('/api/nfg?' + qs);
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error || r.statusText);
+  $('updated').textContent = 'Datos de getafe.ffmadrid.es · ' + new Date(body.fetchedAt).toLocaleTimeString('es-ES');
+  return body.data;
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const show = (html) => { $('content').innerHTML = html; };
+const loading = () => show('<div class="status">Cargando…</div>');
+
+function fill(sel, items, saved, label = (x) => x.name) {
+  sel.innerHTML = items.map((x) => `<option value="${esc(x.id)}">${esc(label(x))}</option>`).join('');
+  if (saved && items.some((x) => x.id === saved)) sel.value = saved;
+}
+
+async function loadSeasons() {
+  fill($('season'), await api('seasons'), store.get('season'));
+  await loadCompetitions();
+}
+async function loadCompetitions() {
+  store.set('season', $('season').value);
+  fill($('competition'), await api('competitions', { season: $('season').value }), store.get('competition'));
+  await loadGroups();
+}
+async function loadGroups() {
+  store.set('competition', $('competition').value);
+  fill($('group'), await api('groups', { competition: $('competition').value }), store.get('group'));
+  await loadRounds();
+}
+async function loadRounds() {
+  store.set('group', $('group').value);
+  const rounds = await api('rounds', { group: $('group').value });
+  // Default to the latest round whose date has passed.
+  const today = new Date();
+  const toDate = (d) => { const [dd, mm, yy] = (d || '').split('-'); return new Date(+yy, mm - 1, +dd); };
+  const past = rounds.filter((r) => r.date && toDate(r.date) <= today);
+  const fallback = (past.at(-1) || rounds[0] || {}).id;
+  fill($('round'), rounds, store.get('round:' + $('group').value) || fallback, (r) => `J${r.number} · ${r.date || ''}`);
+  await render();
+}
+
+const params = () => ({ season: $('season').value, competition: $('competition').value, group: $('group').value, round: $('round').value });
+const isMine = (name) => $('myteam').value && name === $('myteam').value;
+
+async function render() {
+  store.set('round:' + $('group').value, $('round').value);
+  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  loading();
+  try {
+    if (tab === 'standings' || !$('myteam').dataset.group || $('myteam').dataset.group !== $('group').value) {
+      var standings = await api('standings', params());
+      fillTeams(standings);
+    }
+    if (tab === 'results') renderResults(await api('results', params()));
+    else if (tab === 'standings') renderStandings(standings);
+    else renderScorers(await api('scorers', params()));
+  } catch (e) {
+    show(`<div class="status error">No se pudieron cargar los datos: ${esc(e.message)}</div>`);
+  }
+}
+
+function fillTeams(standings) {
+  const sel = $('myteam');
+  const names = standings.map((s) => s.team).sort();
+  sel.innerHTML = '<option value="">—</option>' + names.map((n) => `<option>${esc(n)}</option>`).join('');
+  sel.value = names.includes(store.get('myteam')) ? store.get('myteam') : '';
+  sel.dataset.group = $('group').value;
+}
+
+function renderResults(matches) {
+  if (!matches.length) return show('<div class="status">No hay partidos en esta jornada.</div>');
+  show(matches.map((m) => {
+    const played = m.homeGoals !== null;
+    const score = played ? `${m.homeGoals} - ${m.awayGoals}` : (m.time || 'vs');
+    const tag = { live: ' · en juego', provisional: ' · provisional' }[m.status] || '';
+    return `<div class="match">
+      <div class="row">
+        <div class="home ${isMine(m.home.name) ? 'mine-team' : ''}">${esc(m.home.name)}</div>
+        <div class="score ${m.status}">${esc(score)}</div>
+        <div class="away ${isMine(m.away.name) ? 'mine-team' : ''}">${esc(m.away.name)}</div>
+      </div>
+      <div class="meta">${esc(m.date || '')} ${esc(m.time || '')}${m.venue ? ' · ' + esc(m.venue) : ''}${tag}</div>
+    </div>`;
+  }).join(''));
+}
+
+function renderStandings(rows) {
+  if (!rows.length) return show('<div class="status">Sin clasificación.</div>');
+  const pj = (r) => (r.home.played || 0) + (r.away.played || 0);
+  const sum = (r, k) => (r.home[k] || 0) + (r.away[k] || 0);
+  show(`<table><thead><tr><th>#</th><th class="team">Equipo</th><th>Pts</th><th>PJ</th>
+    <th class="hide-sm">G</th><th class="hide-sm">E</th><th class="hide-sm">P</th><th>GF:GC</th><th class="hide-sm">Racha</th></tr></thead><tbody>
+    ${rows.map((r) => `<tr class="${isMine(r.team) ? 'mine' : ''}"><td>${r.position}</td><td class="team">${esc(r.team)}</td>
+      <td class="pts">${r.points}</td><td>${pj(r)}</td><td class="hide-sm">${sum(r, 'won')}</td><td class="hide-sm">${sum(r, 'drawn')}</td>
+      <td class="hide-sm">${sum(r, 'lost')}</td><td>${r.goalsFor}:${r.goalsAgainst}</td>
+      <td class="hide-sm"><span class="form">${r.form.map((f) => `<i class="${esc(f)}">${esc(f)}</i>`).join('')}</span></td></tr>`).join('')}
+    </tbody></table>`);
+}
+
+function renderScorers(rows) {
+  if (!rows.length) return show('<div class="status">Sin goleadores.</div>');
+  show(`<table><thead><tr><th>#</th><th class="team">Jugador</th><th class="team hide-sm">Equipo</th><th>Goles</th><th>PJ</th></tr></thead><tbody>
+    ${rows.slice(0, 30).map((r, i) => `<tr class="${isMine(r.team) ? 'mine' : ''}"><td>${i + 1}</td>
+      <td class="team">${esc(r.player)}<div class="meta" style="text-align:left">${esc(r.team)}</div></td>
+      <td class="team hide-sm">${esc(r.team)}</td><td class="pts">${r.goals}</td><td>${r.played}</td></tr>`).join('')}
+    </tbody></table>`);
+}
+
+$('season').onchange = () => loadCompetitions().catch(fail);
+$('competition').onchange = () => loadGroups().catch(fail);
+$('group').onchange = () => loadRounds().catch(fail);
+$('round').onchange = () => render();
+$('myteam').onchange = () => { store.set('myteam', $('myteam').value); render(); };
+document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => { tab = b.dataset.tab; store.set('tab', tab); render(); });
+function fail(e) { show(`<div class="status error">No se pudieron cargar los datos: ${esc(e.message)}</div>`); }
+loadSeasons().catch(fail);
+</script>
+</body>
+</html>
