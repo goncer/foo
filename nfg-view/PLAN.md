@@ -95,7 +95,7 @@ Data pages:
 | Results of a round | `NFG_CmpJornada?cod_primaria=1000128&CodCompeticion=C&CodGrupo=G&CodTemporada=T&CodJornada=J` | ✅ |
 | Standings | `NFG_VisClasificacion?cod_primaria=1000128&codcompeticion=C&codgrupo=G&codjornada=J` | ✅ |
 | Top scorers | `NFG_CMP_Goleadores?cod_primaria=1000128&codcompeticion=C&codtemporada=T&codgrupo=G&CodJornada=J` | – (removed from scope) |
-| Full calendar | `NFG_VisCalendario_Vis?cod_primaria=1000128&codtemporada=T&codcompeticion=C&codgrupo=G` | next |
+| Full calendar | `NFG_VisCalendario_Vis?cod_primaria=1000128&codtemporada=T&codcompeticion=C&codgrupo=G` | ✅ (team fixtures) |
 | Match sheet (line-ups, goals, cards, referee, venue) | `NFG_CmpPartido?cod_primaria=1000128&CodActa=A&cod_acta=A` | next |
 | Team page | `NFG_VisEquipos?cod_primaria=1000102&Codigo_Equipo=E` | – (personal data) |
 | Head-to-head | `NFG_LstComparativaEquipos?cod_primaria=1001217&competicion=C&grupo=G&equipo1=E1&equipo2=E2` | later |
